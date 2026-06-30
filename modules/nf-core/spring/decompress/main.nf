@@ -32,6 +32,11 @@ process SPRING_DECOMPRESS {
         $args \\
         -i ${spring} \\
         ${output}
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        spring: 1.1.1
+    END_VERSIONS
     """
 
     stub:

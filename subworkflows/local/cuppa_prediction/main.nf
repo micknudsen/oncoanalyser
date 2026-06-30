@@ -20,6 +20,8 @@ workflow CUPPA_PREDICTION {
     genome_version      // channel: [mandatory] genome version
     cuppa_alt_sj        // channel: [mandatory] /path/to/cuppa_alt_sj/
     cuppa_classifier    // channel: [mandatory] /path/to/cuppa_classifier/
+    report_variant      // value: [mandatory] reporting variant: standard | dna_only
+    publish_dir_name    // value: [mandatory] publish directory name
 
     main:
     // Channel for version.yml files
@@ -65,10 +67,16 @@ workflow CUPPA_PREDICTION {
 
             def has_existing = Utils.hasExistingInput(meta, Constants.INPUT.CUPPA_DIR)
             def has_normal_dna = Utils.hasNormalDna(meta)
+            def has_tumor_rna = Utils.hasTumorRna(meta)
 
             def has_runnable_inputs = isofox_dir || (purple_dir && linx_annotation_dir && virusinterpreter_dir && has_normal_dna)
+            def has_dna_and_rna = isofox_dir && purple_dir && linx_annotation_dir && virusinterpreter_dir && has_normal_dna && has_tumor_rna
 
-            runnable: has_runnable_inputs && !has_existing
+            runnable: (
+                report_variant == 'dna_only'
+                    ? has_dna_and_rna
+                    : has_runnable_inputs
+            ) && !has_existing
             skip: true
                 return meta
         }
@@ -82,6 +90,7 @@ workflow CUPPA_PREDICTION {
             def meta_cuppa = [
                 key: meta.group_id,
                 id: meta.group_id,
+                cuppa_publish_dir: publish_dir_name,
             ]
 
             def has_tumor_dna = Utils.hasTumorDna(meta)
@@ -96,7 +105,16 @@ workflow CUPPA_PREDICTION {
 
             def categories
 
-            if (run_dna && run_rna) {
+            if (report_variant == 'dna_only') {
+
+                assert run_dna && run_rna
+
+                categories = 'DNA'
+
+                meta_cuppa.id = "${meta.group_id}.dna_only"
+                meta_cuppa.sample_id = Utils.getTumorDnaSampleName(meta)
+
+            } else if (run_dna && run_rna) {
 
                 categories = 'ALL'
 

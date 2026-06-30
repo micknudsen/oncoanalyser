@@ -530,6 +530,11 @@ signatures to tumor sample data.
   - `<tumor_dna_id>.cuppa.pred_summ.tsv`: Tumor sample prediction summary
   - `<tumor_dna_id>.cuppa.vis_data.tsv`: Tumor sample predication visualisation data
   - `<tumor_dna_id>.cuppa.vis.png`: Tumor sample prediction visualisation
+- `<group_id>/cuppa_dna/`
+  - `<tumor_dna_id>.cuppa_data.tsv.gz`: DNA-only tumor sample input features, generated in addition to `cuppa/` when both DNA and RNA inputs are analysed.
+  - `<tumor_dna_id>.cuppa.pred_summ.tsv`: DNA-only tumor sample prediction summary.
+  - `<tumor_dna_id>.cuppa.vis_data.tsv`: DNA-only tumor sample prediction visualisation data.
+  - `<tumor_dna_id>.cuppa.vis.png`: DNA-only tumor sample prediction visualisation.
 
 </details>
 
@@ -588,6 +593,9 @@ patient (typically a primary tissue biopsy).
 - `<group_id>/orange/`
   - `<tumor_dna_id>.orange.json`: Aggregated report data.
   - `<tumor_dna_id>.orange.pdf`: Static report PDF.
+- `<group_id>/orange_dna/`
+  - `<tumor_dna_id>.orange.json`: DNA-only aggregated report data, generated in addition to `orange/` when both DNA and RNA inputs are analysed.
+  - `<tumor_dna_id>.orange.pdf`: DNA-only static report PDF.
 
 </details>
 

@@ -13,14 +13,16 @@ include { BAMTOOLS_METRICS      } from '../subworkflows/local/bamtools_metrics'
 include { CHORD_PREDICTION      } from '../subworkflows/local/chord_prediction'
 include { CIDER_CALLING         } from '../subworkflows/local/cider_calling'
 include { COBALT_PROFILING      } from '../subworkflows/local/cobalt_profiling'
-include { CUPPA_PREDICTION      } from '../subworkflows/local/cuppa_prediction'
+include { CUPPA_PREDICTION as CUPPA_PREDICTION_STANDARD } from '../subworkflows/local/cuppa_prediction'
+include { CUPPA_PREDICTION as CUPPA_PREDICTION_DNA_ONLY } from '../subworkflows/local/cuppa_prediction'
 include { ESVEE_CALLING         } from '../subworkflows/local/esvee_calling'
 include { ISOFOX_QUANTIFICATION } from '../subworkflows/local/isofox_quantification'
 include { LILAC_CALLING         } from '../subworkflows/local/lilac_calling'
 include { LINX_ANNOTATION       } from '../subworkflows/local/linx_annotation'
 include { LINX_PLOTTING         } from '../subworkflows/local/linx_plotting'
 include { NEO_PREDICTION        } from '../subworkflows/local/neo_prediction'
-include { ORANGE_REPORTING      } from '../subworkflows/local/orange_reporting'
+include { ORANGE_REPORTING as ORANGE_REPORTING_STANDARD } from '../subworkflows/local/orange_reporting'
+include { ORANGE_REPORTING as ORANGE_REPORTING_DNA_ONLY } from '../subworkflows/local/orange_reporting'
 include { PAVE_ANNOTATION       } from '../subworkflows/local/pave_annotation'
 include { PEACH_CALLING         } from '../subworkflows/local/peach_calling'
 include { PREPARE_REFERENCE     } from '../subworkflows/local/prepare_reference'
@@ -763,9 +765,10 @@ workflow WGTS {
     //
     // channel: [ meta, cuppa_dir ]
     ch_cuppa_out = Channel.empty()
+    ch_cuppa_dna_only_out = Channel.empty()
     if (run_config.stages.cuppa) {
 
-        CUPPA_PREDICTION(
+        CUPPA_PREDICTION_STANDARD(
             ch_inputs,
             ch_isofox_out,
             ch_purple_out,
@@ -774,15 +777,35 @@ workflow WGTS {
             ref_data.genome_version,
             hmf_data.cuppa_alt_sj,
             hmf_data.cuppa_classifier,
+            'standard',
+            'cuppa',
         )
 
-        ch_versions = ch_versions.mix(CUPPA_PREDICTION.out.versions)
+        CUPPA_PREDICTION_DNA_ONLY(
+            ch_inputs,
+            ch_isofox_out,
+            ch_purple_out,
+            ch_linx_somatic_out,
+            ch_virusinterpreter_out,
+            ref_data.genome_version,
+            hmf_data.cuppa_alt_sj,
+            hmf_data.cuppa_classifier,
+            'dna_only',
+            'cuppa_dna',
+        )
 
-        ch_cuppa_out = ch_cuppa_out.mix(CUPPA_PREDICTION.out.cuppa_dir)
+        ch_versions = ch_versions.mix(
+            CUPPA_PREDICTION_STANDARD.out.versions,
+            CUPPA_PREDICTION_DNA_ONLY.out.versions,
+        )
+
+        ch_cuppa_out = ch_cuppa_out.mix(CUPPA_PREDICTION_STANDARD.out.cuppa_dir)
+        ch_cuppa_dna_only_out = ch_cuppa_dna_only_out.mix(CUPPA_PREDICTION_DNA_ONLY.out.cuppa_dir)
 
     } else {
 
         ch_cuppa_out = ch_inputs.map { meta -> [meta, []] }
+        ch_cuppa_dna_only_out = ch_inputs.map { meta -> [meta, []] }
 
     }
 
@@ -791,7 +814,7 @@ workflow WGTS {
     //
     if (run_config.stages.orange) {
 
-        ORANGE_REPORTING(
+        ORANGE_REPORTING_STANDARD(
             ch_inputs,
             ch_bamtools_somatic_out,
             ch_bamtools_germline_out,
@@ -820,9 +843,47 @@ workflow WGTS {
             hmf_data.sigs_etiology,
             hmf_data.alt_sj_distribution,
             hmf_data.gene_exp_distribution,
+            'standard',
+            'orange',
         )
 
-        ch_versions = ch_versions.mix(ORANGE_REPORTING.out.versions)
+        ORANGE_REPORTING_DNA_ONLY(
+            ch_inputs,
+            ch_bamtools_somatic_out,
+            ch_bamtools_germline_out,
+            ch_sage_somatic_dir_out,
+            ch_sage_germline_dir_out,
+            ch_sage_somatic_append_out,
+            ch_sage_germline_append_out,
+            ch_purple_out,
+            ch_linx_somatic_out,
+            ch_linx_somatic_visualiser_dir_out,
+            ch_linx_germline_out,
+            ch_virusinterpreter_out,
+            ch_chord_out,
+            ch_sigs_out,
+            ch_lilac_out,
+            ch_cuppa_dna_only_out,
+            ch_peach_out,
+            ch_isofox_out,
+            ref_data.genome_version,
+            hmf_data.disease_ontology,
+            hmf_data.cohort_mapping,
+            hmf_data.cohort_percentiles,
+            hmf_data.known_fusion_data,
+            hmf_data.driver_gene_panel,
+            hmf_data.ensembl_data_resources,
+            hmf_data.sigs_etiology,
+            hmf_data.alt_sj_distribution,
+            hmf_data.gene_exp_distribution,
+            'dna_only',
+            'orange_dna',
+        )
+
+        ch_versions = ch_versions.mix(
+            ORANGE_REPORTING_STANDARD.out.versions,
+            ORANGE_REPORTING_DNA_ONLY.out.versions,
+        )
     }
 
     //

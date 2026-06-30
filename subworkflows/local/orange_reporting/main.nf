@@ -40,6 +40,8 @@ workflow ORANGE_REPORTING {
     ensembl_data_resources      // channel: [mandatory] /path/to/ensembl_data_resources/
     isofox_alt_sj               // channel: [optional]  /path/to/isofox_alt_sj
     isofox_gene_distribution    // channel: [optional]  /path/to/isofox_gene_distribution
+    report_variant              // value: [mandatory] reporting variant: standard | dna_only
+    publish_dir_name            // value: [mandatory] publish directory name
 
     main:
     // Channel for version.yml files
@@ -152,12 +154,18 @@ workflow ORANGE_REPORTING {
     // NOTE(SW): since the RNA reference files are provided as channels, I seem to be only able to include via channel ops
     // channel: [ meta, tbt_metrics_dir, nbt_metrics_dir, tsage_dir, nsage_dir, tsage_append, nsage_append, purple_dir, tlinx_anno_dir, tlinx_plot_dir, nlinx_anno_dir, virusinterpreter_dir, chord_dir, sigs_dir, lilac_dir, cuppa_dir, peach_dir, isofox_dir, isofox_alt_sj, isofox_gene_distribution ]
     ch_inputs_runnable = Channel.empty()
-        .mix(
+    if (report_variant == 'dna_only') {
+        ch_inputs_runnable = ch_inputs_runnable.mix(
+            ch_inputs_sorted.runnable_dna_and_rna.map { d -> [*d, [], []] },
+        )
+    } else {
+        ch_inputs_runnable = ch_inputs_runnable.mix(
             ch_inputs_sorted.runnable_dna.map { d -> [*d, [], []] },
             ch_inputs_sorted.runnable_dna_and_rna
                 .combine(isofox_alt_sj)
                 .combine(isofox_gene_distribution),
         )
+    }
 
     // Create process input channel
     // channel: sample_data: [ meta, tbt_metrics_dir, nbt_metrics_dir, tsage_dir, nsage_dir, tsmlv_vcf, nsmlv_vcf, purple_dir, tlinx_anno_dir, tlinx_plot_dir, nlinx_anno_dir, virusinterpreter_dir, chord_dir, sigs_dir, lilac_dir, cuppa_dir, peach_dir, isofox_dir ]
@@ -177,7 +185,12 @@ workflow ORANGE_REPORTING {
                 id: meta.group_id,
                 tumor_id: Utils.getTumorDnaSampleName(meta),
                 cancer_type: meta[Constants.InfoField.CANCER_TYPE],
+                orange_publish_dir: publish_dir_name,
             ]
+
+            if (report_variant == 'dna_only') {
+                meta_orange.id = "${meta.group_id}.dna_only"
+            }
 
             def inputs_selected = inputs.clone()
 
@@ -205,10 +218,16 @@ workflow ORANGE_REPORTING {
                 .collect { i -> inputs[i] }
                 .every()
 
-            if (has_rna_tumor) {
+            def enable_rna_reporting = report_variant != 'dna_only' && has_rna_tumor
+
+            if (enable_rna_reporting) {
                 meta_orange.tumor_rna_id = Utils.getTumorRnaSampleName(meta)
             } else {
-                rna_tumor_input_indexes.each { i -> inputs_selected[i] = [] }
+                [sage_somatic_append_index, sage_germline_append_index, *rna_tumor_input_indexes]
+                    .unique()
+                    .each { i -> inputs_selected[i] = [] }
+                isofox_alt_sj = []
+                isofox_gene_distribution = []
             }
 
             // ORANGE only accepts CUPPA with DNA; when providing DNA/RNA inputs but skipping Virus Interpreter CUPPA
@@ -221,7 +240,7 @@ workflow ORANGE_REPORTING {
             }
 
             // Set SAGE append VCF input
-            if (has_rna_tumor) {
+            if (enable_rna_reporting) {
                 // Somatic
                 def sage_somatic_append = inputs_selected[sage_somatic_append_index]
                 if (sage_somatic_append) {

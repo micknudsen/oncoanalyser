@@ -13,6 +13,7 @@ process SPRING_DECOMPRESS {
 
     output:
     tuple val(meta), path("*.fastq.gz"), emit: fastq
+    path 'versions.yml', emit: versions
     tuple val("${task.process}"), val('spring'), val('1.1.1'), topic: versions, emit: versions_spring
     // WARN: Version information not provided by tool on CLI. Please update this string when bumping container versions.
 
@@ -38,5 +39,6 @@ process SPRING_DECOMPRESS {
     def output = write_one_fastq_gz ? "echo '' | gzip > ${prefix}.fastq.gz" : "echo '' | gzip > ${prefix}_R1.fastq.gz; echo '' | gzip > ${prefix}_R2.fastq.gz"
     """
     ${output}
+    echo -e '${task.process}:\\n  spring: 1.1.1\\n' > versions.yml
     """
 }

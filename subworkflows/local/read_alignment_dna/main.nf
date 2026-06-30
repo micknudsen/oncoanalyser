@@ -115,7 +115,7 @@ workflow READ_ALIGNMENT_DNA {
         false,
     )
 
-    ch_versions = ch_versions.mix(SPRING_DECOMPRESS.out.versions_spring)
+    ch_versions = ch_versions.mix(SPRING_DECOMPRESS.out.versions)
 
     ch_fastq_inputs = ch_fastq_native_inputs.mix(
         SPRING_DECOMPRESS.out.fastq.map { meta_fastq, fastqs ->

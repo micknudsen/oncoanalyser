@@ -8,6 +8,7 @@ import Utils
 include { GATK4_MARKDUPLICATES } from '../../../modules/nf-core/gatk4/markduplicates/main'
 include { SAMBAMBA_MERGE       } from '../../../modules/local/sambamba/merge/main'
 include { SAMTOOLS_SORT        } from '../../../modules/nf-core/samtools/sort/main'
+include { SPRING_DECOMPRESS    } from '../../../modules/nf-core/spring/decompress/main'
 include { STAR_ALIGN           } from '../../../modules/local/star/align/main'
 
 workflow READ_ALIGNMENT_RNA {
@@ -28,13 +29,13 @@ workflow READ_ALIGNMENT_RNA {
     ch_inputs_sorted = ch_inputs
         .branch { meta ->
             def has_existing = Utils.hasExistingInput(meta, Constants.INPUT.BAM_RNA_TUMOR)
-            runnable: Utils.hasTumorRnaFastq(meta) && !has_existing
+            runnable: (Utils.hasTumorRnaFastq(meta) || Utils.hasTumorRnaSpring(meta)) && !has_existing
             skip: true
         }
 
-    // Create FASTQ input channel
+    // Create read input channels
     // channel: [ meta_fastq, fastq_fwd, fastq_rev ]
-    ch_fastq_inputs = ch_inputs_sorted.runnable
+    ch_fastq_native_inputs = ch_inputs_sorted.runnable
         .flatMap { meta ->
             def meta_sample = Utils.getTumorRnaSample(meta)
             meta_sample
@@ -53,6 +54,42 @@ workflow READ_ALIGNMENT_RNA {
                     return [meta_fastq, fps['fwd'], fps['rev']]
                 }
         }
+
+    // channel: [ meta_fastq, spring ]
+    ch_spring_inputs = ch_inputs_sorted.runnable
+        .flatMap { meta ->
+            def meta_sample = Utils.getTumorRnaSample(meta)
+            meta_sample
+                .getAt(Constants.FileType.SPRING)
+                ?.collect { key, spring ->
+                    def (library_id, lane) = key
+
+                    def meta_fastq = [
+                        key: meta.group_id,
+                        id: "${meta.group_id}_${meta_sample.sample_id}",
+                        sample_id: meta_sample.sample_id,
+                        library_id: library_id,
+                        lane: lane,
+                    ]
+
+                    return [meta_fastq, spring]
+                } ?: []
+        }
+
+    SPRING_DECOMPRESS(
+        ch_spring_inputs,
+        false,
+    )
+
+    ch_versions = ch_versions.mix(SPRING_DECOMPRESS.out.versions_spring)
+
+    ch_fastq_inputs = ch_fastq_native_inputs.mix(
+        SPRING_DECOMPRESS.out.fastq.map { meta_fastq, fastqs ->
+            assert fastqs.size() == 2
+            def (fastq_fwd, fastq_rev) = fastqs.sort { it.name }
+            [meta_fastq, fastq_fwd, fastq_rev]
+        }
+    )
 
     //
     // MODULE: STAR alignment

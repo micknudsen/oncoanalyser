@@ -41,13 +41,13 @@
             },
             "info": {
                 "type": "string",
-                "description": "",
+                "description": "Additional sample metadata such as library_id and lane for FASTQ or SPRING inputs",
                 "pattern": "^\\S+$",
                 "errorMessage": "info cannot contain spaces"
             },
             "filetype": {
                 "type": "string",
-                "description": "",
+                "description": "Input file type such as fastq, spring, bam, bai, cram, or crai",
                 "pattern": "^\\S+$",
                 "errorMessage": "filetype must be provided and cannot contain spaces"
             },

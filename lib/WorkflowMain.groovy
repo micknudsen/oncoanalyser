@@ -329,8 +329,11 @@ class WorkflowMain {
             stages: stages,
             has_dna: inputs.any { Utils.hasTumorDna(it) },
             has_rna: inputs.any { Utils.hasTumorRna(it) },
-            has_rna_fastq: inputs.any { Utils.hasTumorRnaFastq(it) },
-            has_dna_fastq: inputs.any { Utils.hasTumorDnaFastq(it) || Utils.hasNormalDnaFastq(it) },
+            has_rna_fastq: inputs.any { Utils.hasTumorRnaFastq(it) || Utils.hasTumorRnaSpring(it) },
+            has_dna_fastq: inputs.any {
+                Utils.hasTumorDnaFastq(it) || Utils.hasNormalDnaFastq(it) ||
+                    Utils.hasTumorDnaSpring(it) || Utils.hasNormalDnaSpring(it)
+            },
         ]
     }
 

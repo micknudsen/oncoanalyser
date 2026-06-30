@@ -6,7 +6,7 @@
 
 ## Introduction
 
-The `oncoanalyser` pipeline typically runs from FASTQ, BAM, or CRAM [input files](#analysis-starting-points), accepts
+The `oncoanalyser` pipeline typically runs from FASTQ, SPRING, BAM, or CRAM [input files](#analysis-starting-points), accepts
 most GRCh37 and GRCh38 human [reference genome builds](#custom-genomes), and provides UMI ([unique molecular
 identifier](#umi-processing)) processing for DNA sequencing data.
 
@@ -143,7 +143,7 @@ row as the first line with the below columns:
 | `sample_type`   | Sample type: `tumor`, `normal`                                                                                                                                      |
 | `sequence_type` | Sequence type: `dna`, `rna`                                                                                                                                         |
 | `filetype`      | File type: e.g. `fastq`, `bam`, `bai`; a full list of valid values can be found [here](https://github.com/nf-core/oncoanalyser/blob/2.3.0/lib/Constants.groovy#L80) |
-| `info`          | Additional sample information such as sequencing library and lane for [FASTQ](#fastq) files, this column is only required when running an analysis from FASTQ       |
+| `info`          | Additional sample information such as sequencing library and lane for [FASTQ](#fastq) and [SPRING](#spring) files, this column is only required when running an analysis from read-level inputs |
 | `filepath`      | Absolute filepath to input file, which can be a local filepath or supported protocol (http, https, ftp, s3, az, gz)                                                 |
 
 The identifiers provided in the samplesheet are used to determine output file paths:
@@ -155,7 +155,7 @@ The identifiers provided in the samplesheet are used to determine output file pa
 ### Analysis starting points
 
 The `oncoanalyser` pipeline has been designed in such a way that allows an analysis to start from arbitrary entrypoints
-as long as the required inputs are provided in the samplesheet. An analysis will generally start from either FASTQ or
+as long as the required inputs are provided in the samplesheet. An analysis will generally start from either FASTQ, SPRING, or
 alignment (BAM, CRAM, REDUX BAM) inputs, which are shown in the examples below.
 
 #### FASTQ
@@ -177,6 +177,22 @@ PATIENT1,PATIENT1,PATIENT1-T,tumor,dna,fastq,library_id:S1;lane:002,/path/to/PAT
 Currently only gzip compressed, non-interleaved paired-end FASTQ files are currently supported.
 
 :::
+
+#### SPRING
+
+To run from SPRING:
+
+- specify `spring` in the `filetype` field,
+- set sequencing library and lane information in the `info` field separated by `;`, and
+- provide the SPRING archive in the `filepath` field
+
+`oncoanalyser` will decompress each SPRING input to paired FASTQ files via the nf-core `SPRING_DECOMPRESS` module before alignment.
+
+```csv title="samplesheet.csv"
+group_id,subject_id,sample_id,sample_type,sequence_type,filetype,info,filepath
+PATIENT1,PATIENT1,PATIENT1-T,tumor,dna,spring,library_id:S1;lane:001,/path/to/PATIENT1-T_S1_L001.spring
+PATIENT1,PATIENT1,PATIENT1-T,tumor,rna,spring,library_id:S2;lane:001,/path/to/PATIENT1-T-RNA_S2_L001.spring
+```
 
 #### BAM
 

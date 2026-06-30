@@ -7,6 +7,7 @@ import Utils
 
 include { BWAMEM2_ALIGN  } from '../../../modules/local/bwa-mem2/mem/main'
 include { FASTP          } from '../../../modules/local/fastp/main'
+include { SPRING_DECOMPRESS } from '../../../modules/nf-core/spring/decompress/main'
 
 workflow READ_ALIGNMENT_DNA {
     take:
@@ -34,27 +35,27 @@ workflow READ_ALIGNMENT_DNA {
     ch_inputs_tumor_sorted = ch_inputs
         .branch { meta ->
             def has_existing = Utils.hasExistingInput(meta, Constants.INPUT.BAM_DNA_TUMOR)
-            runnable: Utils.hasTumorDnaFastq(meta) && !has_existing
+            runnable: (Utils.hasTumorDnaFastq(meta) || Utils.hasTumorDnaSpring(meta)) && !has_existing
             skip: true
         }
 
     ch_inputs_normal_sorted = ch_inputs
         .branch { meta ->
             def has_existing = Utils.hasExistingInput(meta, Constants.INPUT.BAM_DNA_NORMAL)
-            runnable: Utils.hasNormalDnaFastq(meta) && !has_existing
+            runnable: (Utils.hasNormalDnaFastq(meta) || Utils.hasNormalDnaSpring(meta)) && !has_existing
             skip: true
         }
 
     ch_inputs_donor_sorted = ch_inputs
         .branch { meta ->
             def has_existing = Utils.hasExistingInput(meta, Constants.INPUT.BAM_DNA_DONOR)
-            runnable: Utils.hasDonorDnaFastq(meta) && !has_existing
+            runnable: (Utils.hasDonorDnaFastq(meta) || Utils.hasDonorDnaSpring(meta)) && !has_existing
             skip: true
         }
 
-    // Create FASTQ input channel
+    // Create read input channels
     // channel: [ meta_fastq, fastq_fwd, fastq_rev ]
-    ch_fastq_inputs = Channel.empty()
+    ch_fastq_native_inputs = Channel.empty()
         .mix(
             ch_inputs_tumor_sorted.runnable.map { meta -> [meta, Utils.getTumorDnaSample(meta), 'tumor'] },
             ch_inputs_normal_sorted.runnable.map { meta -> [meta, Utils.getNormalDnaSample(meta), 'normal'] },
@@ -80,6 +81,49 @@ workflow READ_ALIGNMENT_DNA {
                     return [meta_fastq, fps['fwd'], fps['rev']]
                 }
         }
+
+    // channel: [ meta_fastq, spring ]
+    ch_spring_inputs = Channel.empty()
+        .mix(
+            ch_inputs_tumor_sorted.runnable.map { meta -> [meta, Utils.getTumorDnaSample(meta), 'tumor'] },
+            ch_inputs_normal_sorted.runnable.map { meta -> [meta, Utils.getNormalDnaSample(meta), 'normal'] },
+            ch_inputs_donor_sorted.runnable.map { meta -> [meta, Utils.getDonorDnaSample(meta), 'donor'] },
+        )
+        .flatMap { meta, meta_sample, sample_type ->
+            meta_sample
+                .getAt(Constants.FileType.SPRING)
+                ?.collect { key, spring ->
+                    def (library_id, lane) = key
+
+                    def sample_id = meta_sample.getOrDefault('longitudinal_sample_id', meta_sample['sample_id'])
+
+                    def meta_fastq = [
+                        key: meta.group_id,
+                        id: "${meta.group_id}_${sample_id}",
+                        sample_id: sample_id,
+                        library_id: library_id,
+                        lane: lane,
+                        sample_type: sample_type,
+                    ]
+
+                    return [meta_fastq, spring]
+                } ?: []
+        }
+
+    SPRING_DECOMPRESS(
+        ch_spring_inputs,
+        false,
+    )
+
+    ch_versions = ch_versions.mix(SPRING_DECOMPRESS.out.versions_spring)
+
+    ch_fastq_inputs = ch_fastq_native_inputs.mix(
+        SPRING_DECOMPRESS.out.fastq.map { meta_fastq, fastqs ->
+            assert fastqs.size() == 2
+            def (fastq_fwd, fastq_rev) = fastqs.sort { it.name }
+            [meta_fastq, fastq_fwd, fastq_rev]
+        }
+    )
 
     //
     // MODULE: fastp

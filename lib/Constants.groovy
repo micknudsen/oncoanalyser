@@ -84,6 +84,7 @@ class Constants {
         CRAI,
         CRAM,
         FASTQ,
+        SPRING,
 
         // REDUX
         BAM_REDUX,

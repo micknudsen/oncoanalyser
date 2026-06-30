@@ -31,7 +31,7 @@
 using the [WiGiTS](https://github.com/hartwigmedical/hmftools) toolkit from the Hartwig Medical Foundation. The pipeline
 supports a wide range of experimental setups:
 
-- FASTQ, BAM, and / or CRAM input files
+- FASTQ, SPRING, BAM, and / or CRAM input files
 - WGS (whole genome sequencing), WTS (whole transcriptome sequencing), and targeted / panel sequencing<sup>1</sup>
 - Paired tumor / normal and tumor-only samples, and support for donor samples for further normal subtraction
 - Purity estimate for longitudinal samples using genomic features of the primary sample from the same patient<sup>2</sup>

@@ -117,13 +117,16 @@ class Utils {
                     }
 
                     // Filetype uniqueness
-                    if (meta_sample.containsKey(filetype_enum) & filetype_enum != Constants.FileType.FASTQ) {
+                    if (
+                        meta_sample.containsKey(filetype_enum) &&
+                        ![Constants.FileType.FASTQ, Constants.FileType.SPRING].contains(filetype_enum)
+                    ) {
                         log.error "got duplicate file for ${group_id} ${sample_type_enum}/${sequence_type_enum}: ${filetype_enum}"
                         Nextflow.exit(1)
                     }
 
                     // Handle inputs appropriately
-                    if (filetype_enum === Constants.FileType.FASTQ) {
+                    if ([Constants.FileType.FASTQ, Constants.FileType.SPRING].contains(filetype_enum)) {
 
                         if (!info_data.containsKey(Constants.InfoField.LIBRARY_ID)) {
                             log.error "missing 'library_id' info field for ${group_id} ${sample_type_enum}/${sequence_type_enum}"
@@ -135,27 +138,39 @@ class Utils {
                             Nextflow.exit(1)
                         }
 
-                        def fastq_entries = it.filepath.tokenize(';')
+                        def fastq_key = [info_data[Constants.InfoField.LIBRARY_ID], info_data[Constants.InfoField.LANE]]
+                        def existing_read_keys = [Constants.FileType.FASTQ, Constants.FileType.SPRING]
+                            .findResults { key -> meta_sample.getAt(key)?.keySet()?.toList() ?: [] }
+                            .flatten()
 
-                        if (fastq_entries.size() != 2) {
-                            log.error "expected exactly 2 FASTQ files delimited by ';' (i.e. '<fwd>;<rev>') but found ${fastq_entries.size} " +
-                                " files for ${group_id} ${sample_type_enum}/${sequence_type_enum}"
+                        if (existing_read_keys.contains(fastq_key)) {
+                            log.error "got duplicate lane + library_id data for ${group_id} ${sample_type_enum}/${sequence_type_enum}: ${fastq_key}"
                             Nextflow.exit(1)
                         }
-
-                        def (fwd, rev) = fastq_entries
-                        def fastq_key = [info_data[Constants.InfoField.LIBRARY_ID], info_data[Constants.InfoField.LANE]]
 
                         if (!meta_sample.containsKey(filetype_enum)) {
                             meta_sample[filetype_enum] = [:]
                         }
 
-                        if (meta_sample[filetype_enum].containsKey(fastq_key)) {
-                            log.error "got duplicate lane + library_id data for ${group_id} ${sample_type_enum}/${sequence_type_enum}: ${fastq_key}"
-                            Nextflow.exit(1)
-                        }
+                        if (filetype_enum === Constants.FileType.FASTQ) {
+                            def fastq_entries = it.filepath.tokenize(';')
 
-                        meta_sample[filetype_enum][fastq_key] = ['fwd': Utils.getFileObject(fwd), 'rev': Utils.getFileObject(rev)]
+                            if (fastq_entries.size() != 2) {
+                                log.error "expected exactly 2 FASTQ files delimited by ';' (i.e. '<fwd>;<rev>') but found ${fastq_entries.size} " +
+                                    " files for ${group_id} ${sample_type_enum}/${sequence_type_enum}"
+                                Nextflow.exit(1)
+                            }
+
+                            def (fwd, rev) = fastq_entries
+                            meta_sample[filetype_enum][fastq_key] = ['fwd': Utils.getFileObject(fwd), 'rev': Utils.getFileObject(rev)]
+                        } else {
+                            if (it.filepath.contains(';')) {
+                                log.error "expected exactly 1 SPRING file but found multiple entries for ${group_id} ${sample_type_enum}/${sequence_type_enum}"
+                                Nextflow.exit(1)
+                            }
+
+                            meta_sample[filetype_enum][fastq_key] = Utils.getFileObject(it.filepath)
+                        }
 
                     } else {
 
@@ -364,7 +379,7 @@ class Utils {
 
         inputs.each { meta ->
 
-            // Require BAMs or BAM_MARKDUPs or FASTQs for each defined sample type
+            // Require BAMs or BAM_MARKDUPs or read-level inputs for each defined sample type
             // NOTE(SW): repeating key pairs above to avoid having to duplicate error messages
             sample_keys.each { key ->
 
@@ -379,10 +394,11 @@ class Utils {
                     !meta[key].containsKey(Constants.FileType.BAM_REDUX) &&
                     !meta[key].containsKey(Constants.FileType.CRAM) &&
                     !meta[key].containsKey(Constants.FileType.CRAM_REDUX) &&
-                    !meta[key].containsKey(Constants.FileType.FASTQ)
+                    !meta[key].containsKey(Constants.FileType.FASTQ) &&
+                    !meta[key].containsKey(Constants.FileType.SPRING)
                 ) {
 
-                    log.error "no BAM/CRAM nor BAM_REDUX/CRAM_REDUX nor FASTQ files provided for ${meta.group_id} ${sample_type}/${sequence_type}\n\n" +
+                    log.error "no BAM/CRAM nor BAM_REDUX/CRAM_REDUX nor FASTQ/SPRING files provided for ${meta.group_id} ${sample_type}/${sequence_type}\n\n" +
                         "NB: At least one of these files is required as they are the basis to determine input sample type."
                     Nextflow.exit(1)
                 }
@@ -578,6 +594,10 @@ class Utils {
         return getTumorDnaSample(meta).getOrDefault(Constants.FileType.FASTQ, null)
     }
 
+    static public getTumorDnaSpring(meta) {
+        return getTumorDnaSample(meta).getOrDefault(Constants.FileType.SPRING, null)
+    }
+
     static public getTumorDnaBam(meta) {
         return getTumorDnaSample(meta).getOrDefault(Constants.FileType.BAM, null)
     }
@@ -595,6 +615,10 @@ class Utils {
         return getTumorDnaFastq(meta) !== null
     }
 
+    static public hasTumorDnaSpring(meta) {
+        return getTumorDnaSpring(meta) !== null
+    }
+
     static public hasTumorDnaBam(meta) {
         return getTumorDnaBam(meta) !== null
     }
@@ -607,6 +631,10 @@ class Utils {
     // Files - Normal DNA
     static public getNormalDnaFastq(meta) {
         return getNormalDnaSample(meta).getOrDefault(Constants.FileType.FASTQ, null)
+    }
+
+    static public getNormalDnaSpring(meta) {
+        return getNormalDnaSample(meta).getOrDefault(Constants.FileType.SPRING, null)
     }
 
     static public getNormalDnaBam(meta) {
@@ -625,6 +653,10 @@ class Utils {
         return getNormalDnaFastq(meta) !== null
     }
 
+    static public hasNormalDnaSpring(meta) {
+        return getNormalDnaSpring(meta) !== null
+    }
+
     static public hasNormalDnaBam(meta) {
         return getNormalDnaBam(meta) !== null
     }
@@ -634,7 +666,7 @@ class Utils {
     }
 
     static public hasDnaFastq(meta) {
-        return hasNormalDnaFastq(meta) || hasTumorDnaFastq(meta)
+        return hasNormalDnaFastq(meta) || hasTumorDnaFastq(meta) || hasNormalDnaSpring(meta) || hasTumorDnaSpring(meta)
     }
 
     static public hasDnaReduxBam(meta) {
@@ -645,6 +677,10 @@ class Utils {
     // Files - Donor DNA
     static public getDonorDnaFastq(meta) {
         return getDonorDnaSample(meta).getOrDefault(Constants.FileType.FASTQ, null)
+    }
+
+    static public getDonorDnaSpring(meta) {
+        return getDonorDnaSample(meta).getOrDefault(Constants.FileType.SPRING, null)
     }
 
     static public getDonorDnaBam(meta) {
@@ -664,6 +700,10 @@ class Utils {
         return getDonorDnaFastq(meta) !== null
     }
 
+    static public hasDonorDnaSpring(meta) {
+        return getDonorDnaSpring(meta) !== null
+    }
+
     static public hasDonorDnaBam(meta) {
         return getDonorDnaBam(meta) !== null
     }
@@ -676,6 +716,10 @@ class Utils {
     // Files - Tumor RNA
     static public getTumorRnaFastq(meta) {
         return getTumorRnaSample(meta).getOrDefault(Constants.FileType.FASTQ, null)
+    }
+
+    static public getTumorRnaSpring(meta) {
+        return getTumorRnaSample(meta).getOrDefault(Constants.FileType.SPRING, null)
     }
 
     static public getTumorRnaBam(meta) {
@@ -691,6 +735,10 @@ class Utils {
         return getTumorRnaFastq(meta) !== null
     }
 
+    static public hasTumorRnaSpring(meta) {
+        return getTumorRnaSpring(meta) !== null
+    }
+
     static public hasTumorRnaBam(meta) {
         return getTumorRnaBam(meta) !== null
     }
@@ -698,19 +746,19 @@ class Utils {
 
     // Status
     static public hasTumorDna(meta) {
-        return hasTumorDnaBam(meta) || hasTumorDnaReduxBam(meta) || hasTumorDnaFastq(meta)
+        return hasTumorDnaBam(meta) || hasTumorDnaReduxBam(meta) || hasTumorDnaFastq(meta) || hasTumorDnaSpring(meta)
     }
 
     static public hasNormalDna(meta) {
-        return hasNormalDnaBam(meta) || hasNormalDnaReduxBam(meta) || hasNormalDnaFastq(meta)
+        return hasNormalDnaBam(meta) || hasNormalDnaReduxBam(meta) || hasNormalDnaFastq(meta) || hasNormalDnaSpring(meta)
     }
 
     static public hasDonorDna(meta) {
-        return hasDonorDnaBam(meta) || hasDonorDnaReduxBam(meta) || hasDonorDnaFastq(meta)
+        return hasDonorDnaBam(meta) || hasDonorDnaReduxBam(meta) || hasDonorDnaFastq(meta) || hasDonorDnaSpring(meta)
     }
 
     static public hasTumorRna(meta) {
-        return hasTumorRnaBam(meta) || hasTumorRnaFastq(meta)
+        return hasTumorRnaBam(meta) || hasTumorRnaFastq(meta) || hasTumorRnaSpring(meta)
     }
 
 
